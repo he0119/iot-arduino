@@ -24,19 +24,19 @@ NTPClient timeClient(ntpUDP, "ntp.aliyun.com", 0, 60000);
 //Socket
 #include <SocketIoClient.h>
 #ifdef ENABLE_SSL
-  #define beginwebsocket beginSSL
+#define beginwebsocket beginSSL
 #else
-  #define beginwebsocket begin
+#define beginwebsocket begin
 #endif
 SocketIoClient webSocket;
 
 //DHT
 #include <dht.h>
 #ifdef DHT_VERSION_11
-  #define readdht read11
+#define readdht read11
 #endif
 #ifdef DHT_VERSION_22
-  #define readdht read22
+#define readdht read22
 #endif
 #define DHT_PIN D4 //连接到DHT传感器的端口
 dht DHT;
@@ -58,7 +58,7 @@ unsigned long valve_delay = 60; //电磁阀延时，单位 秒
 unsigned long pump_delay = 60;  //抽水机延时，单位 秒
 
 //Auto Watering
-bool auto_watering = false;             //自动灌溉控制
+bool auto_watering = false;            //自动灌溉控制
 unsigned long watering_interval = 720; //灌溉间隔(分钟)
 bool moisture_trigger = false;         //湿度触发器
 unsigned long soil_moisture = 0;
@@ -73,27 +73,27 @@ bool need_save_config = false; //设置保存触发器
 
 void event(const char *payload, size_t length)
 {
-  const size_t bufferSize = JSON_OBJECT_SIZE(8) + 150;
-  DynamicJsonBuffer jsonBuffer(bufferSize);
-  JsonObject &root = jsonBuffer.parseObject(payload);
+  const size_t capacity = JSON_OBJECT_SIZE(8) + 150;
+  DynamicJsonDocument doc(capacity);
+  auto error = deserializeJson(doc, payload);
   //Test if parsing succeeds.
-  if (!root.success())
+  if (error)
   {
     return;
   }
 
-  if (root["valve"] != "null")
+  if (doc["valve"] != "null")
   {
-    valve = root["valve"];
+    valve = doc["valve"];
     if (valve)
     {
       valve_delay_trigger = true;
       valveMillis = millis(); //重置电磁阀关闭计时
     }
   }
-  if (root["pump"] != "null")
+  if (doc["pump"] != "null")
   {
-    pump = root["pump"];
+    pump = doc["pump"];
     if (pump)
     {
       pump_delay_trigger = true;
@@ -101,35 +101,35 @@ void event(const char *payload, size_t length)
     }
   }
 
-  if (root["auto_watering"] != "null")
+  if (doc["auto_watering"] != "null")
   {
-    auto_watering = root["auto_watering"]; //自动灌溉
-    moisture_trigger = root["auto_watering"];
+    auto_watering = doc["auto_watering"]; //自动灌溉
+    moisture_trigger = doc["auto_watering"];
     need_save_config = true;
   }
-  if (root["moisture_trigger"] != "null")
+  if (doc["moisture_trigger"] != "null")
   {
-    moisture_trigger = root["moisture_trigger"]; //湿度触发器
+    moisture_trigger = doc["moisture_trigger"]; //湿度触发器
   }
 
-  if (root["valve_delay"] != "null")
+  if (doc["valve_delay"] != "null")
   {
-    valve_delay = root["valve_delay"];
+    valve_delay = doc["valve_delay"];
     need_save_config = true;
   }
-  if (root["pump_delay"] != "null")
+  if (doc["pump_delay"] != "null")
   {
-    pump_delay = root["pump_delay"];
+    pump_delay = doc["pump_delay"];
     need_save_config = true;
   }
-  if (root["soil_moisture_limit"] != "null")
+  if (doc["soil_moisture_limit"] != "null")
   {
-    soil_moisture_limit = root["soil_moisture_limit"];
+    soil_moisture_limit = doc["soil_moisture_limit"];
     need_save_config = true;
   }
-  if (root["watering_interval"] != "null")
+  if (doc["watering_interval"] != "null")
   {
-    watering_interval = root["watering_interval"];
+    watering_interval = doc["watering_interval"];
     need_save_config = true;
   }
 
@@ -225,22 +225,22 @@ bool load_config()
   //use configFile.readString instead.
   configFile.readBytes(buf.get(), size);
 
-  const size_t bufferSize = JSON_OBJECT_SIZE(6) + 150;
-  DynamicJsonBuffer jsonBuffer(bufferSize);
-  JsonObject &json = jsonBuffer.parseObject(buf.get());
+  const size_t capacity = JSON_OBJECT_SIZE(6) + 150;
+  DynamicJsonDocument doc(capacity);
+  auto error = deserializeJson(doc, buf.get());
 
-  if (!json.success())
+  if (error)
   {
     return false;
   }
 
   // 读取配置---------------
-  valve_delay = json["valve_delay"];
-  pump_delay = json["pump_delay"];
-  soil_moisture_limit = json["soil_moisture_limit"];
-  watering_interval = json["watering_interval"];
-  auto_watering = json["auto_watering"];
-  last_watering_time = json["last_watering_time"];
+  valve_delay = doc["valve_delay"];
+  pump_delay = doc["pump_delay"];
+  soil_moisture_limit = doc["soil_moisture_limit"];
+  watering_interval = doc["watering_interval"];
+  auto_watering = doc["auto_watering"];
+  last_watering_time = doc["last_watering_time"];
   // ----------------------
 
   return true;
@@ -248,17 +248,16 @@ bool load_config()
 
 bool save_config()
 {
-  const size_t bufferSize = JSON_OBJECT_SIZE(6);
-  DynamicJsonBuffer jsonBuffer(bufferSize);
-  JsonObject &json = jsonBuffer.createObject();
+  const size_t capacity = JSON_OBJECT_SIZE(6);
+  DynamicJsonDocument doc(capacity);
 
   // 保存配置---------------
-  json["valve_delay"] = valve_delay;
-  json["pump_delay"] = pump_delay;
-  json["soil_moisture_limit"] = soil_moisture_limit;
-  json["watering_interval"] = watering_interval;
-  json["auto_watering"] = auto_watering;
-  json["last_watering_time"] = last_watering_time;
+  doc["valve_delay"] = valve_delay;
+  doc["pump_delay"] = pump_delay;
+  doc["soil_moisture_limit"] = soil_moisture_limit;
+  doc["watering_interval"] = watering_interval;
+  doc["auto_watering"] = auto_watering;
+  doc["last_watering_time"] = last_watering_time;
   // -----------------------
 
   File configFile = SPIFFS.open("/config.json", "w");
@@ -267,7 +266,7 @@ bool save_config()
     return false;
   }
 
-  json.printTo(configFile);
+  serializeJson(doc, configFile);
   return true;
 }
 
@@ -283,6 +282,8 @@ void ISRwatchdog()
 
 void setup()
 {
+  // Serial.begin(115200);
+
   pinMode(PUMP_PIN, OUTPUT);
   pinMode(VALVE_PIN, OUTPUT);
   digitalWrite(PUMP_PIN, LOW);
