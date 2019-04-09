@@ -11,4 +11,4 @@ This is a submodule of iot project.
 - `ArduinoJson`: 6.10.0
 - `SocketIoClient`: 0.3
 - `WebSockets`: 2.1.1
-- `DHTstable`: 0.2.
+- `DHTstable`: 0.2.4
