@@ -1,3 +1,17 @@
+//Pins
+#define DHT_PIN D4            // 连接到 DHT 传感器的端口 D4
+#define PUMP_PIN D1           // 抽水机 D1
+#define VALVE_PIN D2          // 电磁阀 (连接继电器的端口) D2
+#define SOIL_MOISTURE_PIN A0  // 土壤湿度传感器 A0
+
+//Config
+#include "config.h"
+#ifdef ENABLE_DEBUG
+#define DEBUG_PRINTLN(...) Serial.println(__VA_ARGS__);
+#else
+#define DEBUG_PRINTLN(...)
+#endif
+
 //WIFI&OTA&FS
 #include <ESP8266WiFi.h>
 #include <ArduinoOTA.h>
@@ -7,9 +21,6 @@
 #include <Ticker.h>
 Ticker secondTick;
 volatile int watchdogCount = 1;
-
-//Config
-#include "config.h"
 
 //NTP
 #include <NTPClient.h>
@@ -38,7 +49,6 @@ SocketIoClient webSocket;
 #ifdef DHT_VERSION_22
 #define readdht read22
 #endif
-#define DHT_PIN D4 //连接到DHT传感器的端口
 dht DHT;
 
 //Status
@@ -64,10 +74,6 @@ bool moisture_trigger = false;         //湿度触发器
 unsigned long soil_moisture = 0;
 unsigned long soil_moisture_limit = 1023; //湿度触发阈值
 unsigned long last_watering_time = 0;     //上次触发时间
-
-#define PUMP_PIN D1          //抽水机
-#define VALVE_PIN D2         //电磁阀 (连接继电器的端口)
-#define SOIL_MOISTURE_PIN A0 //土壤湿度传感器
 
 bool need_save_config = false; //设置保存触发器
 
@@ -133,20 +139,16 @@ void event(const char *payload, size_t length)
     need_save_config = true;
   }
 
-  event_set();
+  digitalWrite(PUMP_PIN, pump);
+  digitalWrite(VALVE_PIN, valve);
+  data_readtime = timeClient.getEpochTime();
+
   upload(0);
   if (need_save_config)
   {
     save_config();
     need_save_config = false;
   }
-}
-
-void event_set()
-{
-  digitalWrite(PUMP_PIN, pump);
-  digitalWrite(VALVE_PIN, valve);
-  data_readtime = timeClient.getEpochTime();
 }
 
 void setup_wifi()
@@ -270,11 +272,11 @@ bool save_config()
   return true;
 }
 
+// 看门狗
 void ISRwatchdog()
 {
-  //看门狗
   watchdogCount++;
-  if (watchdogCount > 10) //超过十秒无响应则重置单片机
+  if (watchdogCount > 10) // 超过十秒无响应则重置单片机
   {
     ESP.reset();
   }
@@ -282,7 +284,9 @@ void ISRwatchdog()
 
 void setup()
 {
-  // Serial.begin(115200);
+#ifdef ENABLE_DEBUG
+  Serial.begin(115200);
+#endif
 
   pinMode(PUMP_PIN, OUTPUT);
   pinMode(VALVE_PIN, OUTPUT);
@@ -301,12 +305,13 @@ void setup()
   ArduinoOTA.setPort(8266);
   ArduinoOTA.setHostname(device_name);
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    DEBUG_PRINTLN((float)progress / total * 100);
     watchdogCount = 1; //Feed dog while doing update
   });
   ArduinoOTA.begin();
 
   //WebSocket设置
-  webSocket.beginwebsocket(server_url, server_port, "/socket.io/?transport=websocket");
+  webSocket.beginwebsocket(server_url, server_port);
   webSocket.setAuthorization(admin_name, admin_password);
 
   char buf[16];
@@ -319,42 +324,45 @@ void setup()
 
 void loop()
 {
-  watchdogCount = 1; //Feed dog
+  watchdogCount = 1; // Feed dog
 
-  ArduinoOTA.handle(); //OTA
-  timeClient.update(); //更新NTP时间
-  webSocket.loop();    //Websocket loop
+  ArduinoOTA.handle(); // OTA
+  timeClient.update(); // 更新NTP时间
+  webSocket.loop();    // Websocket loop
 
-  //每10秒上传一次数据
+  // 每10秒上传一次数据
   if (millis() - lastMillis > 10000)
   {
     read_data();
     upload(1);
   }
 
-  //自动灌溉间隔
+  // 自动灌溉间隔
   if (auto_watering && !moisture_trigger && timeClient.getEpochTime() - last_watering_time > 60 * watering_interval)
   {
     moisture_trigger = true;
     upload(0);
   }
 
-  //根据土壤湿度自动打开电磁阀
+  // 根据土壤湿度自动打开电磁阀
   if (auto_watering && moisture_trigger && soil_moisture > soil_moisture_limit)
   {
-    moisture_trigger = false;
+    moisture_trigger = false; // 重置湿度触发器
 
-    last_watering_time = timeClient.getEpochTime(); //重置上次灌溉时间
-    save_config();
+    last_watering_time = timeClient.getEpochTime(); // 重置上次灌溉时间
+    if (save_config())
+    {
+      DEBUG_PRINTLN("保存配置失败。")
+    };
 
     valve = true;
     digitalWrite(VALVE_PIN, valve);
     valve_delay_trigger = true;
-    valveMillis = millis(); //重置电磁阀关闭计时
+    valveMillis = millis(); // 重置电磁阀关闭计时
     upload(0);
   }
 
-  //延时关闭电磁阀
+  // 延时关闭电磁阀
   if (valve_delay_trigger && millis() - valveMillis > 1000 * valve_delay)
   {
     valve_delay_trigger = false;
@@ -363,7 +371,7 @@ void loop()
     upload(0);
   }
 
-  //延时关闭抽水机
+  // 延时关闭抽水机
   if (pump_delay_trigger && millis() - pumpMillis > 1000 * pump_delay)
   {
     pump_delay_trigger = false;
