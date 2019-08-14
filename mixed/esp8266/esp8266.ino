@@ -55,11 +55,24 @@ void setup_wifi()
   }
 }
 
+void upload(String data)
+{
+  int data_readtime = timeClient.getEpochTime();
+  String payload = String("{\"data\":\"");
+  payload += String(data_readtime - 1500000000);
+  payload += "," + String(device_id);
+  payload += "|" + data;
+  payload += "\"}";
+
+  char msg[200];
+  payload.toCharArray(msg, 200);
+
+  webSocket.emit("devicedata", msg);
+}
+
 void setup()
 {
-#ifdef ENABLE_DEBUG
   Serial.begin(115200);
-#endif
 
   setup_wifi(); //Setup WIFI
 
@@ -82,18 +95,22 @@ void setup()
   webSocket.on(buf, event);
 }
 
-unsigned long messageTimestamp = 0;
 void loop()
 {
   ArduinoOTA.handle(); //OTA
   timeClient.update(); //Update time over NTP
   webSocket.loop();    //Websocket loop
 
-  uint64_t now = millis();
+  String content = "";
+  char character;
 
-  if (now - messageTimestamp > 2000)
+  while (Serial.available())
   {
-    webSocket.emit("devicedata", "0w0");
-    messageTimestamp = now;
+    character = Serial.read();
+    content.concat(character);
+  }
+  if (content.length() > 0){
+    Serial.println(content);
+    upload(content);
   }
 }
