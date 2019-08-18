@@ -56,6 +56,7 @@ unsigned long lastMillis = 0; // Upload Data Timer
 float temperature;
 float relative_humidity;
 unsigned long data_readtime;
+long wifi_signal;
 
 // Pump&Valve
 unsigned long valveMillis = 0; // Valve Auto Close Timer
@@ -180,6 +181,7 @@ void read_data()
     break;
   }
   soil_moisture = analogRead(SOIL_MOISTURE_PIN);
+  wifi_signal = WiFi.RSSI();
   data_readtime = timeClient.getEpochTime();
 }
 
@@ -199,6 +201,7 @@ void upload(bool reset)
   payload += "," + String(valve_delay);
   payload += "," + String(pump_delay);
   payload += "," + String(soil_moisture_threshold);
+  payload += "," + String(wifi_signal);
   payload += "\"}";
 
   char msg[200];

@@ -12,6 +12,7 @@
     "watering_interval": ["浇水间隔",1,0,1],
     "valve_delay": ["阀门延迟",1,0,1],
     "pump_delay": ["泵延迟",1,0,1],
-    "soil_moisture_threshold": ["土壤湿度阈值",1,0,1]
+    "soil_moisture_threshold": ["土壤湿度阈值",1,0,1],
+    "wifi_signal": ["无线信号强度",1,0,0]
   }
 }
