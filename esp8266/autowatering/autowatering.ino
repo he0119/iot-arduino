@@ -1,8 +1,9 @@
 // Pins
-#define DHT_PIN 2            // D4
-#define PUMP_PIN 5           // D1
-#define VALVE_PIN 4          // D2
-#define SOIL_MOISTURE_PIN 17 // A0
+#define DHT_PIN D4  
+#define VALVE1_PIN D5        
+#define VALVE2_PIN D6        
+#define VALVE3_PIN D7        
+#define PUMP_PIN D8 
 
 // Config
 #include "config.h"
@@ -59,22 +60,22 @@ unsigned long data_readtime;
 long wifi_signal;
 
 // Pump&Valve
-unsigned long valveMillis = 0; // Valve Auto Close Timer
-bool valve_auto_close = false; // Valve Auto Close Switch
+unsigned long valve1Millis = 0; // Valve Auto Close Timer
+bool valve1_auto_close = false; // Valve Auto Close Switch
+unsigned long valve2Millis = 0; // Valve Auto Close Timer
+bool valve2_auto_close = false; // Valve Auto Close Switch
+unsigned long valve3Millis = 0; // Valve Auto Close Timer
+bool valve3_auto_close = false; // Valve Auto Close Switch
 unsigned long pumpMillis = 0;  // Pump Auto Close Timer
 bool pump_auto_close = false;  // Pump Auto Close Switch
-bool valve = false;
+bool valve1 = false;
+bool valve2 = false;
+bool valve3 = false;
 bool pump = false;
-unsigned long valve_delay = 60; // Valve Auto Close Delay (seconds)
+unsigned long valve1_delay = 60; // Valve Auto Close Delay (seconds)
+unsigned long valve2_delay = 60; // Valve Auto Close Delay (seconds)
+unsigned long valve3_delay = 60; // Valve Auto Close Delay (seconds)
 unsigned long pump_delay = 60;  // Pump Auto Close Delay (seconds)
-
-// Auto Watering
-bool auto_watering = false;            // Auto Watering Switch
-unsigned long watering_interval = 720; // Auto Watering Interval (minutes)
-bool moisture_trigger = false;         // Moisture Trigger State (enable/disable)
-unsigned long soil_moisture = 0;
-unsigned long soil_moisture_threshold = 1023; // Threshold of soil moisture trigger (0-1023)
-unsigned long last_watering_time = 0;         // Last watering time
 
 bool need_save_config = false;
 
@@ -89,13 +90,31 @@ void event(const char *payload, size_t length)
     return;
   }
 
-  if (doc["valve"] != "null")
+  if (doc["valve1"] != "null")
   {
-    valve = doc["valve"];
-    if (valve)
+    valve1 = doc["valve1"];
+    if (valve1)
     {
-      valve_auto_close = true;
-      valveMillis = millis(); // Reset timer
+      valve1_auto_close = true;
+      valve1Millis = millis(); // Reset timer
+    }
+  }
+  if (doc["valve2"] != "null")
+  {
+    valve2 = doc["valve2"];
+    if (valve2)
+    {
+      valve2_auto_close = true;
+      valve2Millis = millis(); // Reset timer
+    }
+  }
+  if (doc["valve3"] != "null")
+  {
+    valve3 = doc["valve3"];
+    if (valve3)
+    {
+      valve3_auto_close = true;
+      valve3Millis = millis(); // Reset timer
     }
   }
   if (doc["pump"] != "null")
@@ -108,20 +127,19 @@ void event(const char *payload, size_t length)
     }
   }
 
-  if (doc["auto_watering"] != "null")
+  if (doc["valve1_delay"] != "null")
   {
-    auto_watering = doc["auto_watering"];
-    moisture_trigger = doc["auto_watering"];
+    valve1_delay = doc["valve1_delay"];
     need_save_config = true;
   }
-  if (doc["moisture_trigger"] != "null")
+  if (doc["valve2_delay"] != "null")
   {
-    moisture_trigger = doc["moisture_trigger"];
+    valve2_delay = doc["valve2_delay"];
+    need_save_config = true;
   }
-
-  if (doc["valve_delay"] != "null")
+  if (doc["valve3_delay"] != "null")
   {
-    valve_delay = doc["valve_delay"];
+    valve3_delay = doc["valve3_delay"];
     need_save_config = true;
   }
   if (doc["pump_delay"] != "null")
@@ -129,19 +147,11 @@ void event(const char *payload, size_t length)
     pump_delay = doc["pump_delay"];
     need_save_config = true;
   }
-  if (doc["soil_moisture_threshold"] != "null")
-  {
-    soil_moisture_threshold = doc["soil_moisture_threshold"];
-    need_save_config = true;
-  }
-  if (doc["watering_interval"] != "null")
-  {
-    watering_interval = doc["watering_interval"];
-    need_save_config = true;
-  }
 
   digitalWrite(PUMP_PIN, pump);
-  digitalWrite(VALVE_PIN, valve);
+  digitalWrite(VALVE1_PIN, valve1);
+  digitalWrite(VALVE2_PIN, valve2);
+  digitalWrite(VALVE3_PIN, valve3);
   data_readtime = timeClient.getEpochTime();
 
   upload(0);
@@ -180,7 +190,6 @@ void read_data()
     temperature = NULL;
     break;
   }
-  soil_moisture = analogRead(SOIL_MOISTURE_PIN);
   wifi_signal = WiFi.RSSI();
   data_readtime = timeClient.getEpochTime();
 }
@@ -192,15 +201,14 @@ void upload(bool reset)
   payload += "," + String(device_id);
   payload += "|" + String(temperature);
   payload += "," + String(relative_humidity);
-  payload += "," + String(soil_moisture);
-  payload += "," + String(valve);
+  payload += "," + String(valve1);
+  payload += "," + String(valve2);
+  payload += "," + String(valve3);
   payload += "," + String(pump);
-  payload += "," + String(auto_watering);
-  payload += "," + String(moisture_trigger);
-  payload += "," + String(watering_interval);
-  payload += "," + String(valve_delay);
+  payload += "," + String(valve1_delay);
+  payload += "," + String(valve2_delay);
+  payload += "," + String(valve3_delay);
   payload += "," + String(pump_delay);
-  payload += "," + String(soil_moisture_threshold);
   payload += "," + String(wifi_signal);
   payload += "\"}";
 
@@ -231,7 +239,7 @@ bool load_config()
   // use configFile.readString instead.
   configFile.readBytes(buf.get(), size);
 
-  const size_t capacity = JSON_OBJECT_SIZE(6) + 150;
+  const size_t capacity = JSON_OBJECT_SIZE(4) + 150;
   DynamicJsonDocument doc(capacity);
   auto error = deserializeJson(doc, buf.get());
 
@@ -241,12 +249,10 @@ bool load_config()
   }
 
   // Read Config-----------
-  valve_delay = doc["valve_delay"];
+  valve1_delay = doc["valve1_delay"];
+  valve2_delay = doc["valve2_delay"];
+  valve3_delay = doc["valve3_delay"];
   pump_delay = doc["pump_delay"];
-  soil_moisture_threshold = doc["soil_moisture_threshold"];
-  watering_interval = doc["watering_interval"];
-  auto_watering = doc["auto_watering"];
-  last_watering_time = doc["last_watering_time"];
   // ----------------------
 
   return true;
@@ -254,16 +260,14 @@ bool load_config()
 
 bool save_config()
 {
-  const size_t capacity = JSON_OBJECT_SIZE(6);
+  const size_t capacity = JSON_OBJECT_SIZE(4);
   DynamicJsonDocument doc(capacity);
 
   // Save Config------------
-  doc["valve_delay"] = valve_delay;
+  doc["valve1_delay"] = valve1_delay;
+  doc["valve2_delay"] = valve2_delay;
+  doc["valve3_delay"] = valve3_delay;
   doc["pump_delay"] = pump_delay;
-  doc["soil_moisture_threshold"] = soil_moisture_threshold;
-  doc["watering_interval"] = watering_interval;
-  doc["auto_watering"] = auto_watering;
-  doc["last_watering_time"] = last_watering_time;
   // -----------------------
 
   File configFile = SPIFFS.open("/config.json", "w");
@@ -293,9 +297,13 @@ void setup()
 #endif
 
   pinMode(PUMP_PIN, OUTPUT);
-  pinMode(VALVE_PIN, OUTPUT);
+  pinMode(VALVE1_PIN, OUTPUT);
+  pinMode(VALVE2_PIN, OUTPUT);
+  pinMode(VALVE3_PIN, OUTPUT);
   digitalWrite(PUMP_PIN, LOW);
-  digitalWrite(VALVE_PIN, LOW); //Off
+  digitalWrite(VALVE1_PIN, LOW);
+  digitalWrite(VALVE2_PIN, LOW);
+  digitalWrite(VALVE3_PIN, LOW); //Off
 
   SPIFFS.begin(); //FS
   if (!load_config())
@@ -341,37 +349,28 @@ void loop()
     upload(1);
   }
 
-  // Enable moisture trigger
-  if (auto_watering && !moisture_trigger && timeClient.getEpochTime() - last_watering_time > 60 * watering_interval)
+  // Close valve1 after certain delay
+  if (valve1_auto_close && millis() - valve1Millis > 1000 * valve1_delay)
   {
-    moisture_trigger = true;
+    valve1_auto_close = false;
+    valve1 = false;
+    digitalWrite(VALVE1_PIN, valve1);
     upload(0);
   }
-
-  // Open valve when soil moisture passes threshold
-  if (auto_watering && moisture_trigger && soil_moisture > soil_moisture_threshold)
+  // Close valve2 after certain delay
+  if (valve2_auto_close && millis() - valve2Millis > 1000 * valve2_delay)
   {
-    moisture_trigger = false; // Reset trigger state
-
-    last_watering_time = timeClient.getEpochTime(); // Reset last watering time
-    if (save_config())
-    {
-      DEBUG_PRINTLN("Save config failed!")
-    };
-
-    valve = true;
-    digitalWrite(VALVE_PIN, valve);
-    valve_auto_close = true;
-    valveMillis = millis(); // Reset valve timer
+    valve2_auto_close = false;
+    valve2 = false;
+    digitalWrite(VALVE2_PIN, valve2);
     upload(0);
   }
-
-  // Close valve after certain delay
-  if (valve_auto_close && millis() - valveMillis > 1000 * valve_delay)
+  // Close valve3 after certain delay
+  if (valve3_auto_close && millis() - valve3Millis > 1000 * valve3_delay)
   {
-    valve_auto_close = false;
-    valve = false;
-    digitalWrite(VALVE_PIN, valve);
+    valve3_auto_close = false;
+    valve3 = false;
+    digitalWrite(VALVE3_PIN, valve3);
     upload(0);
   }
 
